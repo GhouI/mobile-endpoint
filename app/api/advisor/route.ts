@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
   
   try {
     // Get authentication token
-    const headersList = headers();
+    const headersList = await headers();
     const authHeader = headersList.get('authorization');
     const token = authHeader?.split(' ')[1];
 
@@ -203,7 +203,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(
       { 
-        error: 'Service temporarily unavailable',
+        error: 'Internal server error', 
         details: error instanceof Error ? error.message : 'Unknown error'
       },
       { status: 500 }
@@ -219,7 +219,7 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 100); // Cap maximum limit
     
     // Add authentication check for GET method too
-    const headersList = headers();
+    const headersList = await headers();
     const authHeader = headersList.get('authorization');
     const token = authHeader?.split(' ')[1];
 
@@ -266,7 +266,7 @@ export async function GET(request: NextRequest) {
       messages,
       total: total >= 0 ? total : messages.length, // Fallback if count timed out
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Get conversation history error:', error);
     return NextResponse.json(
       { error: 'Could not retrieve conversation history. Please try again.' },
