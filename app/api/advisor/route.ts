@@ -2,6 +2,8 @@ import { NextResponse, type NextRequest } from 'next/server';
 import OpenAI from 'openai';
 import { connectToDatabase } from '@/lib/mongodb';
 import { AdvisorMessage } from '@/models/AdvisorMessage';
+import { verifyToken } from '@/lib/jwt';
+import { headers } from 'next/headers';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -37,6 +39,20 @@ Remember: Your goal is to help users create memorable and well-planned travel ex
 
 export async function POST(request: NextRequest) {
   try {
+    // Get authentication token
+    const headersList = await headers();
+    const authHeader = headersList.get('authorization');
+    const token = authHeader?.split(' ')[1];
+
+    if (!token) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      );
+    }
+
+    const { userId } = verifyToken(token);
+
     // Get request body
     const { message, partyId, limit = 10 } = await request.json();
 
@@ -52,8 +68,8 @@ export async function POST(request: NextRequest) {
 
     // Get previous messages from database
     const query = partyId 
-      ? { partyId }
-      : {};
+      ? { partyId, user: userId }
+      : { user: userId };
 
     const previousMessages = await AdvisorMessage.find(query)
       .sort({ createdAt: -1 })
@@ -85,6 +101,7 @@ export async function POST(request: NextRequest) {
 
     // Save user message
     await AdvisorMessage.create({
+      user: userId,
       partyId,
       role: 'user',
       content: message,
@@ -92,6 +109,7 @@ export async function POST(request: NextRequest) {
 
     // Save assistant message
     await AdvisorMessage.create({
+      user: userId,
       partyId,
       role: 'assistant',
       content: reply,
@@ -101,22 +119,17 @@ export async function POST(request: NextRequest) {
     const updatedMessages = await AdvisorMessage.find(query)
       .sort({ createdAt: -1 })
       .limit(limit)
-      .populate('user', 'username profilePhoto')
       .lean();
 
     return NextResponse.json({
       message: reply,
-      usage: completion.usage,
       history: updatedMessages.reverse(),
     });
-  } catch (error: any) {
-    console.error('Travel advisor error:', error);
+  } catch (error) {
+    console.error('Advisor error:', error);
     return NextResponse.json(
-      { 
-        error: error.response?.data?.error?.message || 'Internal server error',
-        details: process.env.NODE_ENV === 'development' ? error.message : undefined
-      },
-      { status: error.response?.status || 500 }
+      { error: 'Internal server error', details: error.message },
+      { status: 500 }
     );
   }
 }
