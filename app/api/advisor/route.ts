@@ -1,7 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import OpenAI from 'openai';
-import { headers } from 'next/headers';
-import { verifyToken } from '@/lib/jwt';
 import { connectToDatabase } from '@/lib/mongodb';
 import { AdvisorMessage } from '@/models/AdvisorMessage';
 
@@ -9,7 +7,7 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-const SYSTEM_PROMPT = `You are an expert travel advisor with extensive knowledge of global destinations, local customs, and travel planning. Your role is to help users plan their trips and provide detailed advice about destinations, activities, and local experiences.
+const SYSTEM_PROMPT = `You are an expert travel advisor with extensive knowledge of global destinations, local customs, and travel planning. Your role is to help users plan their trips and provide personalized travel recommendations.
 
 Key responsibilities:
 1. Provide personalized travel recommendations based on users' interests, budget, and preferences
@@ -39,20 +37,6 @@ Remember: Your goal is to help users create memorable and well-planned travel ex
 
 export async function POST(request: NextRequest) {
   try {
-    // Verify authentication
-    const headersList = await headers();
-    const authHeader = headersList.get('authorization');
-    const token = authHeader?.split(' ')[1];
-    
-    if (!token) {
-      return NextResponse.json(
-        { error: 'Authentication required' },
-        { status: 401 }
-      );
-    }
-
-    const { userId } = verifyToken(token);
-
     // Get request body
     const { message, partyId, limit = 10 } = await request.json();
 
@@ -68,8 +52,8 @@ export async function POST(request: NextRequest) {
 
     // Get previous messages from database
     const query = partyId 
-      ? { $or: [{ user: userId, partyId }, { partyId }] }
-      : { user: userId };
+      ? { partyId }
+      : {};
 
     const previousMessages = await AdvisorMessage.find(query)
       .sort({ createdAt: -1 })
@@ -101,7 +85,6 @@ export async function POST(request: NextRequest) {
 
     // Save user message
     await AdvisorMessage.create({
-      user: userId,
       partyId,
       role: 'user',
       content: message,
@@ -109,7 +92,6 @@ export async function POST(request: NextRequest) {
 
     // Save assistant message
     await AdvisorMessage.create({
-      user: userId,
       partyId,
       role: 'assistant',
       content: reply,
@@ -142,18 +124,6 @@ export async function POST(request: NextRequest) {
 // Get conversation history
 export async function GET(request: NextRequest) {
   try {
-    const headersList = await headers();
-    const authHeader = headersList.get('authorization');
-    const token = authHeader?.split(' ')[1];
-    
-    if (!token) {
-      return NextResponse.json(
-        { error: 'Authentication required' },
-        { status: 401 }
-      );
-    }
-
-    const { userId } = verifyToken(token);
     const { searchParams } = new URL(request.url);
     const partyId = searchParams.get('partyId');
     const limit = parseInt(searchParams.get('limit') || '50');
@@ -162,8 +132,8 @@ export async function GET(request: NextRequest) {
 
     // Build query
     const query = partyId 
-      ? { $or: [{ user: userId, partyId }, { partyId }] }
-      : { user: userId };
+      ? { partyId }
+      : {};
 
     // Get messages
     const messages = await AdvisorMessage.find(query)
@@ -183,4 +153,4 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
-} 
+}
