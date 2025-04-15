@@ -461,97 +461,169 @@ This document outlines all available API endpoints in the application.
 ## Destinations
 
 ### Get Destinations
-- **Example Requests**:
+- **Endpoint**: `GET /api/destinations`
+- **Description**: Get all destinations or search by query
+- **Query Parameters**:
+  - `query`: Search term (optional)
+  - `id`: Destination ID to get full details (optional)
+- **Example Request**:
   ```bash
   # Get all destinations
   curl http://localhost:3000/api/destinations
 
   # Search destinations
-  curl "http://localhost:3000/api/destinations?query=Paris"
+  curl http://localhost:3000/api/destinations?query=paris
 
   # Get single destination
-  curl "http://localhost:3000/api/destinations?id=507f1f77bcf86cd799439030"
+  curl http://localhost:3000/api/destinations?id=507f1f77bcf86cd799439013
   ```
-- **Example Response (List)**:
+- **Example Response**:
   ```json
   {
     "destinations": [
       {
-        "id": "507f1f77bcf86cd799439030",
+        "id": "507f1f77bcf86cd799439013",
         "name": "Paris",
         "shortDescription": "The City of Light",
         "bannerUrl": "https://example.com/paris-banner.jpg",
         "weather": {
-          "seasons": ["Spring", "Summer", "Fall", "Winter"],
-          "averageTemperature": {
-            "spring": "15°C",
-            "summer": "25°C",
-            "fall": "16°C",
-            "winter": "5°C"
-          }
+          "average": "15°C",
+          "description": "Mild"
         },
-        "currency": "EUR",
-        "languages": ["French", "English"],
+        "currency": {
+          "code": "EUR",
+          "name": "Euro",
+          "symbol": "€"
+        },
+        "languages": [
+          {
+            "name": "French",
+            "code": "fr"
+          }
+        ],
         "attractions": [
-          "Eiffel Tower",
-          "Louvre Museum",
-          "Notre-Dame Cathedral"
+          {
+            "name": "Eiffel Tower",
+            "description": "Iconic iron tower",
+            "iconUrl": "https://example.com/eiffel-icon.jpg"
+          }
         ]
       }
     ],
     "total": 1
   }
   ```
-- **Example Response (Single)**:
+- **Error Responses**:
+  - `404`: Destination not found (when using id parameter)
+  - `500`: Internal server error
+
+### Create Destination
+- **Endpoint**: `POST /api/destinations`
+- **Description**: Create a new destination
+- **Request Body**:
+  ```json
+  {
+    "name": "string",
+    "shortDescription": "string",
+    "longDescription": "string",
+    "bannerUrl": "string",
+    "weather": {
+      "average": "string",
+      "description": "string"
+    },
+    "currency": {
+      "code": "string",
+      "name": "string",
+      "symbol": "string"
+    },
+    "languages": [
+      {
+        "name": "string",
+        "code": "string"
+      }
+    ],
+    "attractions": [
+      {
+        "name": "string",
+        "description": "string",
+        "iconUrl": "string"
+      }
+    ]
+  }
+  ```
+- **Example Request**:
+  ```bash
+  curl -X POST http://localhost:3000/api/destinations \
+    -H "Content-Type: application/json" \
+    -d '{
+      "name": "Tokyo",
+      "shortDescription": "Vibrant metropolis of Japan",
+      "longDescription": "Tokyo is the capital and largest city of Japan...",
+      "bannerUrl": "https://example.com/tokyo-banner.jpg",
+      "weather": {
+        "average": "16°C",
+        "description": "Mild"
+      },
+      "currency": {
+        "code": "JPY",
+        "name": "Japanese Yen",
+        "symbol": "¥"
+      },
+      "languages": [
+        {
+          "name": "Japanese",
+          "code": "ja"
+        }
+      ],
+      "attractions": [
+        {
+          "name": "Shibuya Crossing",
+          "description": "World's busiest pedestrian crossing",
+          "iconUrl": "https://example.com/shibuya-icon.jpg"
+        }
+      ]
+    }'
+  ```
+- **Example Response**:
   ```json
   {
     "destination": {
-      "id": "507f1f77bcf86cd799439030",
-      "name": "Paris",
-      "shortDescription": "The City of Light",
-      "longDescription": "Paris, France's capital, is a major European city and a global center for art, fashion, gastronomy and culture...",
-      "bannerUrl": "https://example.com/paris-banner.jpg",
+      "id": "507f1f77bcf86cd799439014",
+      "name": "Tokyo",
+      "shortDescription": "Vibrant metropolis of Japan",
+      "longDescription": "Tokyo is the capital and largest city of Japan...",
+      "bannerUrl": "https://example.com/tokyo-banner.jpg",
       "weather": {
-        "seasons": ["Spring", "Summer", "Fall", "Winter"],
-        "averageTemperature": {
-          "spring": "15°C",
-          "summer": "25°C",
-          "fall": "16°C",
-          "winter": "5°C"
-        },
-        "rainySeasons": ["Fall", "Winter"]
+        "average": "16°C",
+        "description": "Mild"
       },
-      "currency": "EUR",
-      "languages": ["French", "English"],
+      "currency": {
+        "code": "JPY",
+        "name": "Japanese Yen",
+        "symbol": "¥"
+      },
+      "languages": [
+        {
+          "name": "Japanese",
+          "code": "ja"
+        }
+      ],
       "attractions": [
         {
-          "name": "Eiffel Tower",
-          "description": "Iconic iron lattice tower on the Champ de Mars",
-          "imageUrl": "https://example.com/eiffel.jpg",
-          "ticketPrice": "26 EUR",
-          "bestTimeToVisit": "Early morning or sunset"
-        },
-        // ... more attractions
-      ],
-      "localCuisine": [
-        {
-          "name": "Croissant",
-          "description": "Flaky, buttery pastry",
-          "imageUrl": "https://example.com/croissant.jpg"
+          "name": "Shibuya Crossing",
+          "description": "World's busiest pedestrian crossing",
+          "iconUrl": "https://example.com/shibuya-icon.jpg"
         }
-        // ... more cuisine items
       ],
-      "transportationOptions": [
-        {
-          "type": "Metro",
-          "description": "Extensive underground network",
-          "averageCost": "1.90 EUR per ticket"
-        }
-        // ... more transportation options
-      ]
+      "createdAt": "2024-04-15T12:00:00.000Z",
+      "updatedAt": "2024-04-15T12:00:00.000Z"
     }
   }
   ```
+- **Error Responses**:
+  - `400`: Missing required fields
+  - `409`: A destination with this name already exists
+  - `500`: Internal server error
 
 ## Authentication Notes
 

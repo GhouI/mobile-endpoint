@@ -55,4 +55,56 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+// Create a new destination
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    
+    // Validate required fields
+    const requiredFields = [
+      'name',
+      'shortDescription',
+      'longDescription',
+      'bannerUrl',
+      'weather',
+      'currency',
+      'languages',
+      'attractions'
+    ];
+
+    for (const field of requiredFields) {
+      if (!body[field]) {
+        return NextResponse.json(
+          { error: `Missing required field: ${field}` },
+          { status: 400 }
+        );
+      }
+    }
+
+    await connectToDatabase();
+
+    // Check if destination with same name already exists
+    const existingDestination = await Destination.findOne({ name: body.name });
+    if (existingDestination) {
+      return NextResponse.json(
+        { error: 'A destination with this name already exists' },
+        { status: 409 }
+      );
+    }
+
+    const destination = await Destination.create(body);
+    
+    return NextResponse.json(
+      { destination },
+      { status: 201 }
+    );
+  } catch (error) {
+    console.error('Create destination error:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
 } 
