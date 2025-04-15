@@ -1,7 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import OpenAI from 'openai';
-import { connectToDatabase } from '@/lib/mongodb';
-import { AdvisorMessage } from '@/models/AdvisorMessage';
 import { verifyToken } from '@/lib/jwt';
 import { headers } from 'next/headers';
 
@@ -9,24 +7,15 @@ import { headers } from 'next/headers';
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
+
 // Define proper types for better type safety
 interface TokenPayload {
   userId: string;
-  [key: string]: any; // For any additional fields in the token
+  [key: string]: any;
 }
 
 interface RequestBody {
   message?: string;
-  limit?: number;
-}
-
-interface MessageDocument {
-  _id: string;
-  user: string;
-  role: 'system' | 'user' | 'assistant';
-  content: string;
-  createdAt: Date;
-  [key: string]: any;
 }
 
 interface ChatMessage {
@@ -65,8 +54,6 @@ Important: Keep responses concise and focused, especially for popular destinatio
 Remember: Your goal is to help users create memorable and well-planned travel experiences while being mindful of practical considerations and group dynamics.`;
 
 export async function POST(request: NextRequest) {
-  let dbConnection = false;
-  
   try {
     // Get authentication token from headers
     const authHeader = request.headers.get('authorization');
@@ -80,13 +67,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify token with proper error handling
-    let userId: string;
     try {
       const decoded = verifyToken(token) as TokenPayload;
       if (!decoded || !decoded.userId) {
         throw new Error('Invalid token payload');
       }
-      userId = decoded.userId;
     } catch (tokenError) {
       return NextResponse.json(
         { error: 'Invalid or expired token' },
@@ -96,7 +81,7 @@ export async function POST(request: NextRequest) {
 
     // Get request body with validation
     const body = await request.json().catch(() => ({} as RequestBody));
-    const { message, limit = 5 } = body;
+    const { message } = body;
 
     if (!message) {
       return NextResponse.json(
@@ -105,41 +90,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Connect to database with timeout
-    try {
-      await connectToDatabase();
-      dbConnection = true;
-    } catch (dbError) {
-      console.error('Database connection error:', dbError);
-      return NextResponse.json(
-        { error: 'Database connection failed' },
-        { status: 503 }
-      );
-    }
-
-    // Get previous messages for the user
-    const previousMessages = await AdvisorMessage.find({ user: userId })
-      .sort({ createdAt: -1 })
-      .limit(limit)
-      .lean()
-      .exec();
-
-    // Convert to MessageDocument type safely
-    const typedMessages: MessageDocument[] = previousMessages.map((msg: any) => ({
-      _id: msg._id.toString(),
-      user: msg.user,
-      role: msg.role,
-      content: msg.content,
-      createdAt: msg.createdAt,
-    }));
-
-    // Format conversation history for API
+    // Format conversation for API
     const messages: ChatMessage[] = [
       { role: 'system', content: SYSTEM_PROMPT },
-      ...previousMessages.reverse().map(msg => ({
-        role: msg.role as 'system' | 'user' | 'assistant',
-        content: msg.content,
-      })),
       { role: 'user', content: message },
     ];
 
@@ -163,61 +116,14 @@ export async function POST(request: NextRequest) {
     
     const reply = completion.choices[0].message.content;
 
-    // Save messages in a transaction if possible, or use Promise.all as fallback
-    const savePromises = [
-      // Save user message
-      AdvisorMessage.create({
-        user: userId,
-        role: 'user' as const,
-        content: message,
-      }),
-      // Save assistant message
-      AdvisorMessage.create({
-        user: userId,
-        role: 'assistant' as const,
-        content: reply,
-      })
-    ];
-    
-    await Promise.all(savePromises);
-
-    // Create properly typed history objects
-    const historyMessages = [
-      ...previousMessages.reverse(),
-      { 
-        _id: 'temp-user-msg', 
-        user: userId, 
-        role: 'user' as const, 
-        content: message,
-        createdAt: new Date()
-      },
-      { 
-        _id: 'temp-assistant-msg', 
-        user: userId, 
-        role: 'assistant' as const, 
-        content: reply,
-        createdAt: new Date()
-      }
-    ];
-
-    // Return only the necessary data to improve response time
+    // Return the response
     return NextResponse.json({
-      message: reply,
-      history: historyMessages
+      message: reply
     });
     
   } catch (error: unknown) {
     console.error('Advisor error:', error);
     
-    // Only connect to database if we haven't already
-    if (!dbConnection) {
-      try {
-        await connectToDatabase();
-      } catch (dbError) {
-        console.error('Failed to connect to database during error handling:', dbError);
-      }
-    }
-
     // Better error handling with type checking
     if (error instanceof Error) {
       // Handle timeouts
@@ -258,60 +164,4 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Get conversation history with improved error handling
-export async function GET(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 100); // Cap maximum limit
-    
-    // Add authentication check for GET method too
-    const headersList = await headers();
-    const authHeader = headersList.get('authorization');
-    const token = authHeader?.split(' ')[1];
-
-    if (!token) {
-      return NextResponse.json(
-        { error: 'Authentication required' },
-        { status: 401 }
-      );
-    }
-
-    // Verify token
-    const { userId } = verifyToken(token);
-
-    await connectToDatabase();
-
-    // Get messages with projection to limit returned fields
-    const messages = await AdvisorMessage.find({ user: userId }, 'role content createdAt user')
-      .sort({ createdAt: 1 }) // Chronological order
-      .limit(limit)
-      .populate('user', 'username profilePhoto')
-      .lean()
-      .exec();
-
-    // Use countDocuments with a timeout to prevent long-running queries
-    const countPromise = new Promise<number>((resolve) => {
-      const timeoutId = setTimeout(() => resolve(-1), 3000); // 3-second timeout
-      AdvisorMessage.countDocuments({ user: userId }).then(count => {
-        clearTimeout(timeoutId);
-        resolve(count);
-      }).catch(() => {
-        clearTimeout(timeoutId);
-        resolve(-1);
-      });
-    });
-
-    const total = await countPromise;
-
-    return NextResponse.json({
-      messages,
-      total: total >= 0 ? total : messages.length, // Fallback if count timed out
-    });
-  } catch (error: unknown) {
-    console.error('Get conversation history error:', error);
-    return NextResponse.json(
-      { error: 'Could not retrieve conversation history. Please try again.' },
-      { status: 500 }
-    );
-  }
-}
+// Remove GET endpoint since we're not storing history anymore
