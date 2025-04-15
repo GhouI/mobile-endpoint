@@ -1,4 +1,5 @@
-import { NextResponse, type NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { Party } from '@/models/Party';
 import { verifyToken } from '@/lib/jwt';

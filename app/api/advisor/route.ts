@@ -8,9 +8,33 @@ import { headers } from 'next/headers';
 // Create OpenAI client with timeout configuration
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
-  timeout: 30000, // 30 second timeout
-  maxRetries: 2, // Limit retries to prevent long-hanging requests
 });
+// Define proper types for better type safety
+interface TokenPayload {
+  userId: string;
+  [key: string]: any; // For any additional fields in the token
+}
+
+interface RequestBody {
+  message?: string;
+  partyId?: string;
+  limit?: number;
+}
+
+interface MessageDocument {
+  _id: string;
+  user: string;
+  partyId?: string;
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+  createdAt: Date;
+  [key: string]: any; // For any additional fields in the document
+}
+
+interface ChatMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+}
 
 const SYSTEM_PROMPT = `You are an expert travel advisor with extensive knowledge of global destinations, local customs, and travel planning. Your role is to help users plan their trips and provide personalized travel recommendations.
 
@@ -46,9 +70,8 @@ export async function POST(request: NextRequest) {
   let dbConnection = false;
   
   try {
-    // Get authentication token
-    const headersList = await headers();
-    const authHeader = headersList.get('authorization');
+    // Get authentication token from headers
+    const authHeader = request.headers.get('authorization');
     const token = authHeader?.split(' ')[1];
 
     if (!token) {
@@ -59,9 +82,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify token with proper error handling
-    let userId;
+    let userId: string;
     try {
-      const decoded = verifyToken(token);
+      const decoded = verifyToken(token) as TokenPayload;
+      if (!decoded || !decoded.userId) {
+        throw new Error('Invalid token payload');
+      }
       userId = decoded.userId;
     } catch (tokenError) {
       return NextResponse.json(
@@ -71,8 +97,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Get request body with validation
-    const body = await request.json().catch(() => ({}));
-    const { message, partyId, limit = 5 } = body; // Reduced default limit
+    const body = await request.json().catch(() => ({} as RequestBody));
+    const { message, partyId, limit = 5 } = body;
 
     if (!message) {
       return NextResponse.json(
@@ -97,7 +123,6 @@ export async function POST(request: NextRequest) {
     const query = partyId 
       ? { partyId, user: userId }
       : { user: userId };
-
     // Get previous messages with a reasonable limit
     const previousMessages = await AdvisorMessage.find(query)
       .sort({ createdAt: -1 })
@@ -105,77 +130,96 @@ export async function POST(request: NextRequest) {
       .lean()
       .exec();
 
+    // Convert to MessageDocument type safely
+    const typedMessages: MessageDocument[] = previousMessages.map(msg => ({
+      user: msg.user,
+      role: msg.role,
+      content: msg.content,
+      createdAt: msg.createdAt,
+      ...(msg.partyId && { partyId: msg.partyId })
+    }));
+
     // Check if the message contains keywords about Spain to adjust settings
-    const isSpainQuery = message.toLowerCase().includes('spain') || 
-                         message.toLowerCase().includes('barcelona') || 
-                         message.toLowerCase().includes('madrid');
-    
-    // Format conversation history for ChatGPT
-    const messages = [
+    // Format conversation history for API
+    const messages: ChatMessage[] = [
       { role: 'system', content: SYSTEM_PROMPT },
       ...previousMessages.reverse().map(msg => ({
-        role: msg.role,
+        role: msg.role as 'system' | 'user' | 'assistant',
         content: msg.content,
       })),
       { role: 'user', content: message },
     ];
 
-    // Adjust parameters for Spain-related queries to prevent timeouts
-    const maxTokens = isSpainQuery ? 600 : 1000;
-    const temperature = isSpainQuery ? 0.5 : 0.7;
 
-    // Call ChatGPT with timeout handling
-    const completion = await Promise.race([
-      openai.chat.completions.create({
-        model: 'gpt-4o-mini',
-        messages,
-        temperature,
-        max_tokens: maxTokens,
-        top_p: 1,
-        frequency_penalty: 0,
-        presence_penalty: 0,
-      }),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('OpenAI API timeout')), 25000)
-      )
-    ]);
-
-    // @ts-ignore - Handle the race promise result
+    // Call OpenAI with timeout handling
+    const completionPromise = openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages,
+    });
+    
+    // Define timeout with type casting to avoid Promise race type errors
+    const timeoutPromise: Promise<never> = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('OpenAI API timeout')), 25000)
+    );
+    
+    const completion = await Promise.race([completionPromise, timeoutPromise]);
+    
+    // Ensure the reply exists to satisfy TypeScript
+    if (!completion.choices[0]?.message?.content) {
+      throw new Error('Invalid response from OpenAI API');
+    }
+    
     const reply = completion.choices[0].message.content;
 
-    // Batch save operations to reduce database overhead
-    await Promise.all([
+    // Save messages in a transaction if possible, or use Promise.all as fallback
+    const savePromises = [
       // Save user message
       AdvisorMessage.create({
         user: userId,
-        partyId,
-        role: 'user',
+        ...(partyId && { partyId }), // Only include partyId if it exists
+        role: 'user' as const,
         content: message,
       }),
       // Save assistant message
       AdvisorMessage.create({
         user: userId,
-        partyId,
-        role: 'assistant',
+        ...(partyId && { partyId }),
+        role: 'assistant' as const,
         content: reply,
       })
-    ]);
+    ];
+    
+    await Promise.all(savePromises);
 
-    // Get updated conversation history (optional - can be removed if causing performance issues)
-    const updatedMessages = await AdvisorMessage.find(query)
-      .sort({ createdAt: 1 }) // Sort in chronological order
-      .limit(limit)
-      .lean()
-      .exec();
+    // Create properly typed history objects
+    const historyMessages = [
+      ...previousMessages.reverse(),
+      { 
+        _id: 'temp-user-msg', 
+        user: userId, 
+        role: 'user' as const, 
+        content: message,
+        createdAt: new Date()
+      },
+      { 
+        _id: 'temp-assistant-msg', 
+        user: userId, 
+        role: 'assistant' as const, 
+        content: reply,
+        createdAt: new Date()
+      }
+    ];
 
+    // Return only the necessary data to improve response time
     return NextResponse.json({
       message: reply,
-      history: updatedMessages,
+      history: historyMessages
     });
+    
   } catch (error: unknown) {
     console.error('Advisor error:', error);
     
-    // Clean up database connection if needed
+    // Only connect to database if we haven't already
     if (!dbConnection) {
       try {
         await connectToDatabase();
@@ -184,8 +228,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Handle specific error types
+    // Better error handling with type checking
     if (error instanceof Error) {
+      // Handle timeouts
       if (error.message.includes('timeout') || error.message.includes('timed out')) {
         return NextResponse.json(
           { error: 'Request timed out. Please try a more specific question or break it into smaller parts.' },
@@ -193,18 +238,30 @@ export async function POST(request: NextRequest) {
         );
       }
       
+      // Handle rate limits
       if (error.message.includes('rate limit')) {
         return NextResponse.json(
           { error: 'Service temporarily unavailable. Please try again in a few minutes.' },
           { status: 429 }
         );
       }
+      
+      // Other OpenAI-specific errors
+      if (error.message.includes('openai')) {
+        return NextResponse.json(
+          { error: 'AI service temporarily unavailable. Please try again later.' },
+          { status: 502 }
+        );
+      }
     }
 
+    // Generic error as fallback
     return NextResponse.json(
       { 
         error: 'Internal server error', 
-        details: error instanceof Error ? error.message : 'Unknown error'
+        details: process.env.NODE_ENV === 'development' ? 
+          (error instanceof Error ? error.message : 'Unknown error') : 
+          undefined
       },
       { status: 500 }
     );
