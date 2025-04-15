@@ -1,21 +1,19 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import OpenAI from 'openai';
+import { connectToDatabase } from '@/lib/mongodb';
 import { verifyToken } from '@/lib/jwt';
-import { headers } from 'next/headers';
+import { openai } from '@/lib/openai';
+import { AdvisorMessage } from '@/models/AdvisorMessage';
 
-// Create OpenAI client with timeout configuration
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
-// Define proper types for better type safety
-interface TokenPayload {
-  userId: string;
-  [key: string]: any;
-}
+const SYSTEM_PROMPT = `You are a helpful travel advisor. Provide concise, accurate, and practical travel advice. 
+Focus on specific recommendations, safety tips, and local insights. 
+Keep responses clear and actionable.`;
 
 interface RequestBody {
-  message?: string;
+  message: string;
+}
+
+interface TokenPayload {
+  userId: string;
 }
 
 interface ChatMessage {
@@ -23,25 +21,9 @@ interface ChatMessage {
   content: string;
 }
 
-const SYSTEM_PROMPT = `You are an expert travel advisor with extensive knowledge of global destinations, local customs, and travel planning. Your role is to help users plan their trips and provide personalized travel recommendations.
-
-Key responsibilities:
-1. Provide personalized travel recommendations based on users' interests, budget, and preferences
-2. Share insider knowledge about destinations, including hidden gems and local favorites
-3. Offer practical advice about transportation, accommodation, and local customs
-4. Help users understand cultural norms and etiquette
-5. Suggest activities and experiences that match the party's interests
-6. Provide safety tips and travel precautions when relevant
-7. Help with budget planning and cost estimates
-
-
-Important: Keep responses concise and focused, especially for popular destinations like Spain, to prevent timeouts.
-
-Remember: Your goal is to help users create memorable and well-planned travel experiences while being mindful of practical considerations and group dynamics.`;
-
-export async function POST(request: NextRequest) {
+// Get conversation history
+export async function GET(request: NextRequest) {
   try {
-    // Get authentication token from headers
     const authHeader = request.headers.get('authorization');
     const token = authHeader?.split(' ')[1];
 
@@ -52,22 +34,37 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify token with proper error handling
-    try {
-      const decoded = verifyToken(token) as TokenPayload;
-      if (!decoded || !decoded.userId) {
-        throw new Error('Invalid token payload');
-      }
-    } catch (tokenError) {
+    const { userId } = verifyToken(token) as TokenPayload;
+    await connectToDatabase();
+
+    const messages = await AdvisorMessage.find({ user: userId })
+      .sort({ createdAt: 1 });
+
+    return NextResponse.json({ messages });
+  } catch (error) {
+    console.error('Get conversation error:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
+// Send message and get response
+export async function POST(request: NextRequest) {
+  try {
+    const authHeader = request.headers.get('authorization');
+    const token = authHeader?.split(' ')[1];
+
+    if (!token) {
       return NextResponse.json(
-        { error: 'Invalid or expired token' },
-        { status: 403 }
+        { error: 'Authentication required' },
+        { status: 401 }
       );
     }
 
-    // Get request body with validation
-    const body = await request.json().catch(() => ({} as RequestBody));
-    const { message } = body;
+    const { userId } = verifyToken(token) as TokenPayload;
+    const { message } = await request.json();
 
     if (!message) {
       return NextResponse.json(
@@ -76,78 +73,81 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    await connectToDatabase();
+
+    // Store user message
+    await AdvisorMessage.create({
+      user: userId,
+      role: 'user',
+      content: message,
+    });
+
+    // Get conversation history
+    const history = await AdvisorMessage.find({ user: userId })
+      .sort({ createdAt: -1 })
+      .limit(10);
+
     // Format conversation for API
     const messages: ChatMessage[] = [
       { role: 'system', content: SYSTEM_PROMPT },
-      { role: 'user', content: message },
+      ...history.reverse().map(msg => ({
+        role: msg.role as 'user' | 'assistant',
+        content: msg.content,
+      })),
     ];
 
-    // Call OpenAI with timeout handling
-    const completionPromise = openai.chat.completions.create({
+    // Call OpenAI
+    const completion = await openai.chat.completions.create({
       model: 'gpt-4.1-nano',
       messages,
     });
-    
-    // Define timeout with type casting to avoid Promise race type errors
-    const timeoutPromise: Promise<never> = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('OpenAI API timeout')), 25000)
-    );
-    
-    const completion = await Promise.race([completionPromise, timeoutPromise]);
-    
-    // Ensure the reply exists to satisfy TypeScript
-    if (!completion.choices[0]?.message?.content) {
+
+    const reply = completion.choices[0]?.message?.content;
+    if (!reply) {
       throw new Error('Invalid response from OpenAI API');
     }
-    
-    const reply = completion.choices[0].message.content;
 
-    // Return the response
-    return NextResponse.json({
-      message: reply
+    // Store assistant response
+    await AdvisorMessage.create({
+      user: userId,
+      role: 'assistant',
+      content: reply,
     });
-    
-  } catch (error: unknown) {
-    console.error('Advisor error:', error);
-    
-    // Better error handling with type checking
-    if (error instanceof Error) {
-      // Handle timeouts
-      if (error.message.includes('timeout') || error.message.includes('timed out')) {
-        return NextResponse.json(
-          { error: 'Request timed out. Please try a more specific question or break it into smaller parts.' },
-          { status: 504 }
-        );
-      }
-      
-      // Handle rate limits
-      if (error.message.includes('rate limit')) {
-        return NextResponse.json(
-          { error: 'Service temporarily unavailable. Please try again in a few minutes.' },
-          { status: 429 }
-        );
-      }
-      
-      // Other OpenAI-specific errors
-      if (error.message.includes('openai')) {
-        return NextResponse.json(
-          { error: 'AI service temporarily unavailable. Please try again later.' },
-          { status: 502 }
-        );
-      }
-    }
 
-    // Generic error as fallback
+    return NextResponse.json({ message: reply });
+  } catch (error) {
+    console.error('Send message error:', error);
     return NextResponse.json(
-      { 
-        error: 'Internal server error', 
-        details: process.env.NODE_ENV === 'development' ? 
-          (error instanceof Error ? error.message : 'Unknown error') : 
-          undefined
-      },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }
 }
 
-// Remove GET endpoint since we're not storing history anymore
+// Clear conversation history
+export async function DELETE(request: NextRequest) {
+  try {
+    const authHeader = request.headers.get('authorization');
+    const token = authHeader?.split(' ')[1];
+
+    if (!token) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      );
+    }
+
+    const { userId } = verifyToken(token) as TokenPayload;
+    await connectToDatabase();
+
+    await AdvisorMessage.deleteMany({ user: userId });
+
+    return NextResponse.json({ message: 'Conversation history cleared successfully' });
+  } catch (error) {
+    console.error('Clear conversation error:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}

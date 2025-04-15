@@ -3,7 +3,6 @@ import { IUser } from './User';
 
 export interface IAdvisorMessage extends mongoose.Document {
   user: mongoose.Types.ObjectId | IUser;
-  partyId?: mongoose.Types.ObjectId;
   role: 'user' | 'assistant';
   content: string;
   createdAt: Date;
@@ -16,10 +15,6 @@ const advisorMessageSchema = new mongoose.Schema<IAdvisorMessage>(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
       required: true,
-    },
-    partyId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Party',
     },
     role: {
       type: String,
@@ -38,6 +33,5 @@ const advisorMessageSchema = new mongoose.Schema<IAdvisorMessage>(
 
 // Create index for efficient message retrieval
 advisorMessageSchema.index({ user: 1, createdAt: -1 });
-advisorMessageSchema.index({ partyId: 1, createdAt: -1 });
 
 export const AdvisorMessage = mongoose.models.AdvisorMessage || mongoose.model<IAdvisorMessage>('AdvisorMessage', advisorMessageSchema); 
