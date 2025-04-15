@@ -17,18 +17,16 @@ interface TokenPayload {
 
 interface RequestBody {
   message?: string;
-  partyId?: string;
   limit?: number;
 }
 
 interface MessageDocument {
   _id: string;
   user: string;
-  partyId?: string;
   role: 'system' | 'user' | 'assistant';
   content: string;
   createdAt: Date;
-  [key: string]: any; // For any additional fields in the document
+  [key: string]: any;
 }
 
 interface ChatMessage {
@@ -98,7 +96,7 @@ export async function POST(request: NextRequest) {
 
     // Get request body with validation
     const body = await request.json().catch(() => ({} as RequestBody));
-    const { message, partyId, limit = 5 } = body;
+    const { message, limit = 5 } = body;
 
     if (!message) {
       return NextResponse.json(
@@ -119,27 +117,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Build query based on parameters
-    const query = partyId 
-      ? { partyId, user: userId }
-      : { user: userId };
-    // Get previous messages with a reasonable limit
-    const previousMessages = await AdvisorMessage.find(query)
+    // Get previous messages for the user
+    const previousMessages = await AdvisorMessage.find({ user: userId })
       .sort({ createdAt: -1 })
       .limit(limit)
       .lean()
       .exec();
 
     // Convert to MessageDocument type safely
-    const typedMessages: MessageDocument[] = previousMessages.map(msg => ({
+    const typedMessages: MessageDocument[] = previousMessages.map((msg: any) => ({
+      _id: msg._id.toString(),
       user: msg.user,
       role: msg.role,
       content: msg.content,
       createdAt: msg.createdAt,
-      ...(msg.partyId && { partyId: msg.partyId })
     }));
 
-    // Check if the message contains keywords about Spain to adjust settings
     // Format conversation history for API
     const messages: ChatMessage[] = [
       { role: 'system', content: SYSTEM_PROMPT },
@@ -149,7 +142,6 @@ export async function POST(request: NextRequest) {
       })),
       { role: 'user', content: message },
     ];
-
 
     // Call OpenAI with timeout handling
     const completionPromise = openai.chat.completions.create({
@@ -176,14 +168,12 @@ export async function POST(request: NextRequest) {
       // Save user message
       AdvisorMessage.create({
         user: userId,
-        ...(partyId && { partyId }), // Only include partyId if it exists
         role: 'user' as const,
         content: message,
       }),
       // Save assistant message
       AdvisorMessage.create({
         user: userId,
-        ...(partyId && { partyId }),
         role: 'assistant' as const,
         content: reply,
       })
@@ -272,7 +262,6 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const partyId = searchParams.get('partyId');
     const limit = Math.min(parseInt(searchParams.get('limit') || '50'), 100); // Cap maximum limit
     
     // Add authentication check for GET method too
@@ -292,13 +281,8 @@ export async function GET(request: NextRequest) {
 
     await connectToDatabase();
 
-    // Build query including user check
-    const query = partyId 
-      ? { partyId, user: userId }
-      : { user: userId };
-
     // Get messages with projection to limit returned fields
-    const messages = await AdvisorMessage.find(query, 'role content createdAt user partyId')
+    const messages = await AdvisorMessage.find({ user: userId }, 'role content createdAt user')
       .sort({ createdAt: 1 }) // Chronological order
       .limit(limit)
       .populate('user', 'username profilePhoto')
@@ -308,7 +292,7 @@ export async function GET(request: NextRequest) {
     // Use countDocuments with a timeout to prevent long-running queries
     const countPromise = new Promise<number>((resolve) => {
       const timeoutId = setTimeout(() => resolve(-1), 3000); // 3-second timeout
-      AdvisorMessage.countDocuments(query).then(count => {
+      AdvisorMessage.countDocuments({ user: userId }).then(count => {
         clearTimeout(timeoutId);
         resolve(count);
       }).catch(() => {
