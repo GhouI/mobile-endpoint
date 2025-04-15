@@ -33,21 +33,7 @@ Key responsibilities:
 5. Suggest activities and experiences that match the party's interests
 6. Provide safety tips and travel precautions when relevant
 7. Help with budget planning and cost estimates
-8. Recommend local food and dining experiences
-9. Suggest optimal travel times and seasonal considerations
-10. Help coordinate group activities and party planning
 
-When providing advice:
-- Be specific and detailed in your recommendations
-- Consider the group size and dynamics
-- Factor in accessibility and practical constraints
-- Include both popular attractions and off-the-beaten-path options
-- Provide context about local culture and customs
-- Be mindful of different budget levels
-- Consider safety and comfort factors
-- Include time estimates for activities
-- Suggest alternatives when relevant
-- Provide tips for group coordination
 
 Important: Keep responses concise and focused, especially for popular destinations like Spain, to prevent timeouts.
 
@@ -98,7 +84,7 @@ export async function POST(request: NextRequest) {
 
     // Call OpenAI with timeout handling
     const completionPromise = openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: 'gpt-4.1-nano',
       messages,
     });
     
