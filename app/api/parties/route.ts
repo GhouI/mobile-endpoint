@@ -117,13 +117,6 @@ export async function POST(request: NextRequest) {
         type: 'Point', // Explicitly set, though schema has default
         coordinates: [longitude, latitude], // MongoDB GeoJSON format: [longitude, latitude]
       };
-    } else if (!isGlobal) {
-       // Safeguard: this state should not be reached if validation above is correct
-      console.error("Create party error: Coordinates inconsistency for local party.");
-      return NextResponse.json(
-        { error: 'Internal error processing coordinates for local party.' },
-        { status: 500 }
-      );
     }
 
     // --- Create Party in DB ---
