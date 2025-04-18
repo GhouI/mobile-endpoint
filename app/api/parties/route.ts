@@ -104,19 +104,20 @@ export async function POST(request: NextRequest) {
       owner: userId,
       participants: [userId], // Start with the owner as a participant
       currentParticipants: 1, // Explicitly set initial participant count
-      // status: 'open', // No need to set, schema default + pre-save hook handles this
       imageUrl: imageUrl || undefined, // Use undefined if null/empty for cleaner DB entry
       additionalFields: additionalFields || {}, // Matches schema type Map/default
-      isGlobal: !!isGlobal, // Ensure boolean, matches schema required: true
-      // createdAt: handled by timestamps: true
+      isGlobal: !!isGlobal // Ensure boolean, matches schema required: true
     };
 
-    // Add coordinates field for local parties
+    // Handle coordinates based on party type
     if (!isGlobal && latitude !== null && longitude !== null) {
       partyData.coordinates = {
-        type: 'Point', // Explicitly set, though schema has default
-        coordinates: [longitude, latitude], // MongoDB GeoJSON format: [longitude, latitude]
+        type: 'Point',
+        coordinates: [longitude, latitude] // MongoDB GeoJSON format: [longitude, latitude]
       };
+    } else if (isGlobal) {
+      // For global parties, explicitly set coordinates to null
+      partyData.coordinates = null;
     }
 
     // --- Create Party in DB ---
