@@ -1,4 +1,26 @@
 import mongoose from 'mongoose';
+import { User, Party, Message } from '@/models';
+import { AdvisorMessage } from '@/models/AdvisorMessage';
+import { Destination } from '@/models/Destination';
+
+// Register models
+const registerModels = () => {
+  if (!mongoose.models.User) {
+    mongoose.model('User', User.schema);
+  }
+  if (!mongoose.models.Party) {
+    mongoose.model('Party', Party.schema);
+  }
+  if (!mongoose.models.Message) {
+    mongoose.model('Message', Message.schema);
+  }
+  if (!mongoose.models.AdvisorMessage) {
+    mongoose.model('AdvisorMessage', AdvisorMessage.schema);
+  }
+  if (!mongoose.models.Destination) {
+    mongoose.model('Destination', Destination.schema);
+  }
+};
 
 declare global {
   var mongooseInstance: {
@@ -33,6 +55,8 @@ export async function connectToDatabase() {
 
   try {
     await global.mongooseInstance.promise;
+    // Register models after connection is established
+    registerModels();
     return mongoose;
   } catch (error) {
     console.error('Error connecting to MongoDB:', error);

@@ -79,7 +79,7 @@ This document outlines all available API endpoints in the application.
 ### Create Party
 - **Endpoint**: `POST /api/parties`
 - **Authentication**: Required
-- **Description**: Create a new party
+- **Description**: Create a new party. Parties can be either global (online) or local (physical location).
 - **Request Body**:
   ```json
   {
@@ -94,46 +94,100 @@ This document outlines all available API endpoints in the application.
     "longitude": "number (required if !isGlobal)"
   }
   ```
-- **Example Request**:
+- **Field Requirements**:
+  - `location`: Required. The name or description of the party location
+  - `description`: Required. Detailed description of the party
+  - `estimatedPrice`: Required. Must be a non-negative number
+  - `maxParticipants`: Required. Must be a number greater than or equal to 1
+  - `isGlobal`: Required. Boolean indicating if the party is global (true) or local (false)
+  - `latitude` and `longitude`: Required only for local parties (isGlobal: false)
+  - `imageUrl`: Optional. URL of the party image
+  - `additionalFields`: Optional. Object containing any additional party information
+
+- **Example Requests**:
   ```bash
+  # Create a global party
   curl -X POST http://localhost:3000/api/parties \
     -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
     -H "Content-Type: application/json" \
     -d '{
-      "location": "Paris, France",
-      "description": "Looking for travel buddies to explore Paris!",
-      "estimatedPrice": 1500,
+      "location": "Online Gaming Party",
+      "description": "Join for an awesome gaming session!",
+      "estimatedPrice": 0,
+      "maxParticipants": 5,
+      "isGlobal": true
+    }'
+
+  # Create a local party
+  curl -X POST http://localhost:3000/api/parties \
+    -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
+    -H "Content-Type: application/json" \
+    -d '{
+      "location": "Central Park",
+      "description": "Outdoor gaming meetup",
+      "estimatedPrice": 10,
       "maxParticipants": 4,
-      "imageUrl": "https://example.com/paris.jpg",
       "isGlobal": false,
-      "latitude": 48.8566,
-      "longitude": 2.3522,
+      "latitude": 40.7829,
+      "longitude": -73.9654,
+      "imageUrl": "https://example.com/central-park.jpg",
       "additionalFields": {
-        "duration": "7 days",
-        "preferredLanguages": ["English", "French"]
+        "meetingPoint": "Near the fountain",
+        "activities": ["Board games", "Frisbee"]
       }
     }'
   ```
-- **Example Response**:
+- **Example Responses**:
   ```json
+  // Global Party Response
   {
     "message": "Party created successfully",
     "party": {
       "id": "507f1f77bcf86cd799439012",
-      "location": "Paris, France",
-      "description": "Looking for travel buddies to explore Paris!",
-      "estimatedPrice": 1500,
+      "location": "Online Gaming Party",
+      "description": "Join for an awesome gaming session!",
+      "estimatedPrice": 0,
+      "maxParticipants": 5,
+      "currentParticipants": 1,
+      "isGlobal": true,
+      "coordinates": null,
+      "owner": {
+        "id": "507f1f77bcf86cd799439011",
+        "username": "johndoe",
+        "profilePhoto": "/default-profile.png"
+      },
+      "participants": [
+        {
+          "id": "507f1f77bcf86cd799439011",
+          "username": "johndoe",
+          "profilePhoto": "/default-profile.png"
+        }
+      ],
+      "status": "open",
+      "createdAt": "2024-03-20T12:00:00.000Z",
+      "updatedAt": "2024-03-20T12:00:00.000Z"
+    }
+  }
+
+  // Local Party Response
+  {
+    "message": "Party created successfully",
+    "party": {
+      "id": "507f1f77bcf86cd799439013",
+      "location": "Central Park",
+      "description": "Outdoor gaming meetup",
+      "estimatedPrice": 10,
       "maxParticipants": 4,
       "currentParticipants": 1,
-      "imageUrl": "https://example.com/paris.jpg",
       "isGlobal": false,
       "coordinates": {
         "type": "Point",
-        "coordinates": [2.3522, 48.8566]
+        "coordinates": [-73.9654, 40.7829]
       },
+      "imageUrl": "https://example.com/central-park.jpg",
       "additionalFields": {
-        "duration": "7 days",
-        "preferredLanguages": ["English", "French"]
+        "meetingPoint": "Near the fountain",
+        "activities": ["Board games", "Frisbee"]
       },
       "owner": {
         "id": "507f1f77bcf86cd799439011",
@@ -155,7 +209,11 @@ This document outlines all available API endpoints in the application.
   ```
 - **Error Responses**:
   - `400`: Missing required fields
+  - `400`: Invalid numeric fields (price negative or maxParticipants < 1)
+  - `400`: Missing coordinates for local party
+  - `400`: Invalid coordinates format
   - `401`: Authentication required
+  - `401`: Invalid token
   - `500`: Internal server error
 
 ### Search Parties

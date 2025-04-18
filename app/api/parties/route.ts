@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
-import { Party } from '@/models/Party'; // Your Party model based on the provided schema
+import { Party } from '@/models'; // Updated import to use the index file
 import { verifyToken } from '@/lib/jwt'; // Assuming verifyToken works as expected
 import { headers } from 'next/headers';
 
