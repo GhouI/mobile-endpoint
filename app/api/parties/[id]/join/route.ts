@@ -145,7 +145,8 @@ export async function DELETE(request: NextRequest) {
         { 
           error: 'Authentication required',
           details: 'No authentication token provided in the Authorization header',
-          code: 'AUTH_REQUIRED'
+          code: 'AUTH_REQUIRED',
+          solution: 'Please provide a valid authentication token in the Authorization header'
         },
         { status: 401 }
       );
@@ -163,7 +164,8 @@ export async function DELETE(request: NextRequest) {
         { 
           error: 'Invalid authentication token',
           details: 'The provided token is either expired, malformed, or invalid',
-          code: 'INVALID_TOKEN'
+          code: 'INVALID_TOKEN',
+          solution: 'Please log in again to get a new valid token'
         },
         { status: 401 }
       );
@@ -177,7 +179,8 @@ export async function DELETE(request: NextRequest) {
         { 
           error: 'Party not found',
           details: `No party exists with ID: ${id}`,
-          code: 'PARTY_NOT_FOUND'
+          code: 'PARTY_NOT_FOUND',
+          solution: 'Please verify the party ID and try again'
         },
         { status: 404 }
       );
@@ -189,7 +192,13 @@ export async function DELETE(request: NextRequest) {
         { 
           error: 'Cannot leave party',
           details: 'You are not a participant of this party',
-          code: 'NOT_PARTICIPANT'
+          code: 'NOT_PARTICIPANT',
+          solution: 'You can only leave parties that you are currently participating in',
+          partyInfo: {
+            id: party._id,
+            name: party.name,
+            currentParticipants: party.currentParticipants
+          }
         },
         { status: 400 }
       );
@@ -200,8 +209,14 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json(
         { 
           error: 'Cannot leave party',
-          details: 'Party owners cannot leave their own party. Please delete the party instead.',
-          code: 'OWNER_CANNOT_LEAVE'
+          details: 'Party owners cannot leave their own party',
+          code: 'OWNER_CANNOT_LEAVE',
+          solution: 'If you want to remove yourself from the party, you must either transfer ownership or delete the party',
+          partyInfo: {
+            id: party._id,
+            name: party.name,
+            ownerId: party.owner
+          }
         },
         { status: 400 }
       );
@@ -237,8 +252,10 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json(
       { 
         error: 'Internal server error',
-        details: 'An unexpected error occurred while processing your request',
-        code: 'INTERNAL_ERROR'
+        details: 'An unexpected error occurred while processing your request to leave the party',
+        code: 'INTERNAL_ERROR',
+        errorDetails: error instanceof Error ? error.message : 'Unknown error',
+        solution: 'Please try again later or contact support if the problem persists'
       },
       { status: 500 }
     );
