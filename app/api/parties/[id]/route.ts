@@ -119,7 +119,14 @@ export async function DELETE(request: NextRequest) {
     
     if (!token) {
       return NextResponse.json(
-        { error: 'Authentication required' },
+        { 
+          error: 'Authentication required',
+          details: {
+            message: 'No authentication token provided in the Authorization header',
+            solution: 'Please provide a valid JWT token in the Authorization header',
+            code: 'AUTH_REQUIRED'
+          }
+        },
         { status: 401 }
       );
     }
@@ -131,7 +138,14 @@ export async function DELETE(request: NextRequest) {
     
     if (!party) {
       return NextResponse.json(
-        { error: 'Party not found' },
+        { 
+          error: 'Party not found',
+          details: {
+            message: `No party exists with ID: ${id}`,
+            solution: 'Please verify the party ID and try again',
+            code: 'PARTY_NOT_FOUND'
+          }
+        },
         { status: 404 }
       );
     }
@@ -139,7 +153,18 @@ export async function DELETE(request: NextRequest) {
     // Check if user is the owner
     if (party.owner.toString() !== userId) {
       return NextResponse.json(
-        { error: 'Only the party owner can delete the party' },
+        { 
+          error: 'Permission denied',
+          details: {
+            message: 'Only the party owner can delete the party',
+            solution: 'You must be the owner of the party to delete it',
+            code: 'PERMISSION_DENIED',
+            partyInfo: {
+              id: party._id,
+              ownerId: party.owner
+            }
+          }
+        },
         { status: 403 }
       );
     }
@@ -147,12 +172,26 @@ export async function DELETE(request: NextRequest) {
     await Party.findByIdAndDelete(id);
 
     return NextResponse.json({
-      message: 'Party deleted successfully'
+      message: 'Party deleted successfully',
+      details: {
+        deletedPartyId: id,
+        timestamp: new Date().toISOString(),
+        action: 'delete',
+        status: 'success'
+      }
     });
   } catch (error) {
     console.error('Delete party error:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { 
+        error: 'Internal server error',
+        details: {
+          message: 'An unexpected error occurred while deleting the party',
+          solution: 'Please try again later or contact support if the problem persists',
+          code: 'INTERNAL_ERROR',
+          errorDetails: error instanceof Error ? error.message : 'Unknown error occurred'
+        }
+      },
       { status: 500 }
     );
   }
