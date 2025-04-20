@@ -1,7 +1,7 @@
 import {AuthCred, AuthResponse, ConversationHistory, 
     CreatePartyRequest, GetDestinationResponse, LeavePartyResponse, 
     ListDestinationsResponse, MyPartiesResponse, PartyResponse, 
-    SearchPartyFilter, SearchPartyResponse, sendMessageResponses} from "./types";
+    SearchPartyFilter, SearchPartyResponse, sendMessageResponses, HolidayParty} from "./types";
 
 
 import { Message } from "react-hook-form";
@@ -127,11 +127,42 @@ class MobileEndPointSDK {
         return this.request<GetDestinationResponse>(`/api/destinations?id=${id}`); 
     }
 
+    async getHolidayDetails(token: string, id: string): Promise<HolidayParty> {
+        try {
+            const response = await fetch(`${this.baseUrl}/api/parties/${id}`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                },
+            });
 
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || errorData.message || 'Failed to fetch party details');
+            }
 
+            const data = await response.json();
+            return data.party;
+        } catch (error) {
+            console.error('Error in getHolidayDetails:', error);
+            throw error;
+        }
+    }
 
-
-
-
-
+    async updateParty(
+        id: string,
+        updateData: {
+            location?: string;
+            description?: string;
+            estimatedPrice?: number;
+            maxParticipants?: number;
+            imageUrl?: string;
+            additionalFields?: {
+                duration?: string;
+                preferredLanguages?: string[];
+            };
+            status?: 'open' | 'full' | 'closed';
+        }
+    ): Promise<PartyResponse> {
+        return this.request<PartyResponse>(`/api/parties/${id}`, 'PATCH', updateData);
+    }
 }

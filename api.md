@@ -835,4 +835,208 @@ All authenticated endpoints require a Bearer token in the Authorization header:
 curl -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." http://localhost:3000/api/endpoint
 ```
 
-The JWT token is valid for 7 days from issuance. 
+The JWT token is valid for 7 days from issuance.
+
+## Messaging
+
+### Send Message
+- **Endpoint**: `POST /api/parties/{partyId}/messages`
+- **Authentication**: Required
+- **Description**: Send a message to a party. Can be either private (to a specific user) or public (to all participants).
+- **Request Body**:
+  ```json
+  {
+    "content": "string (required)",
+    "recipientId": "string (optional, for private messages)"
+  }
+  ```
+- **Example Requests**:
+  ```bash
+  # Send a private message
+  curl -X POST http://localhost:3000/api/parties/{partyId}/messages \
+    -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
+    -H "Content-Type: application/json" \
+    -d '{
+      "content": "Hello party owner!",
+      "recipientId": "68051f15b6893852caa9a744"
+    }'
+
+  # Send a group message
+  curl -X POST http://localhost:3000/api/parties/{partyId}/messages \
+    -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
+    -H "Content-Type: application/json" \
+    -d '{
+      "content": "Hello everyone in the party!"
+    }'
+  ```
+- **Example Response**:
+  ```json
+  {
+    "status": "Message sent successfully",
+    "data": {
+      "_id": "68051f28b6893852caa9a758",
+      "content": "Hello everyone in the party!",
+      "sender": {
+        "_id": "68051f15b6893852caa9a744",
+        "username": "testuser1",
+        "profilePhoto": "/default-profile.png"
+      },
+      "party": "68051f1bb6893852caa9a74a",
+      "isPrivate": false,
+      "createdAt": "2025-04-20T16:22:00.408Z",
+      "updatedAt": "2025-04-20T16:22:00.408Z",
+      "__v": 0
+    }
+  }
+  ```
+- **Error Responses**:
+  - `400`: Message content is required
+  - `401`: Authentication required
+  - `403`: You are not a participant of this party
+  - `404`: Party not found
+  - `500`: Internal server error
+
+### Get Party Messages
+- **Endpoint**: `GET /api/parties/{partyId}/messages`
+- **Authentication**: Required
+- **Description**: Retrieve all public messages in a party. Private messages are not included in the response.
+- **Example Request**:
+  ```bash
+  curl -X GET http://localhost:3000/api/parties/{partyId}/messages \
+    -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  ```
+- **Example Response**:
+  ```json
+  {
+    "messages": [
+      {
+        "_id": "68051f28b6893852caa9a758",
+        "content": "Hello everyone in the party!",
+        "sender": {
+          "_id": "68051f15b6893852caa9a744",
+          "username": "testuser1",
+          "profilePhoto": "/default-profile.png"
+        },
+        "party": "68051f1bb6893852caa9a74a",
+        "isPrivate": false,
+        "createdAt": "2025-04-20T16:22:00.408Z",
+        "updatedAt": "2025-04-20T16:22:00.408Z",
+        "__v": 0
+      }
+    ]
+  }
+  ```
+- **Error Responses**:
+  - `401`: Authentication required
+  - `403`: You are not a participant of this party
+  - `404`: Party not found
+  - `500`: Internal server error
+
+### Get Private Messages
+- **Endpoint**: `GET /api/parties/{partyId}/messages/private`
+- **Authentication**: Required
+- **Description**: Retrieve private messages between you and another party participant.
+- **Query Parameters**:
+  - `recipientId`: ID of the user you want to see messages with (required)
+- **Example Request**:
+  ```bash
+  curl -X GET "http://localhost:3000/api/parties/68051f1bb6893852caa9a74a/messages/private?recipientId=68051f15b6893852caa9a744" \
+    -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  ```
+- **Example Response**:
+  ```json
+  {
+    "messages": [
+      {
+        "_id": "68051f21b6893852caa9a750",
+        "content": "Hello party owner!",
+        "sender": {
+          "_id": "68051f15b6893852caa9a744",
+          "username": "testuser1",
+          "profilePhoto": "/default-profile.png"
+        },
+        "recipient": {
+          "_id": "68051f15b6893852caa9a744",
+          "username": "testuser1",
+          "profilePhoto": "/default-profile.png"
+        },
+        "party": "68051f1bb6893852caa9a74a",
+        "isPrivate": true,
+        "createdAt": "2025-04-20T16:21:53.190Z",
+        "updatedAt": "2025-04-20T16:21:53.190Z",
+        "__v": 0
+      }
+    ]
+  }
+  ```
+- **Error Responses**:
+  - `400`: Recipient ID is required
+  - `401`: Authentication required
+  - `403`: You are not a participant of this party
+  - `404`: Party not found
+  - `500`: Internal server error
+
+### Get Group Messages
+- **Endpoint**: `GET /api/parties/{partyId}/messages/group`
+- **Authentication**: Required
+- **Description**: Retrieve all public messages in a party's group chat.
+- **Query Parameters**:
+  - `limit`: Maximum number of messages to return (optional, default: 50)
+  - `before`: Message ID to get messages before (optional, for pagination)
+- **Example Request**:
+  ```bash
+  # Get latest group messages
+  curl -X GET "http://localhost:3000/api/parties/68051f1bb6893852caa9a74a/messages/group" \
+    -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+  # Get group messages with pagination
+  curl -X GET "http://localhost:3000/api/parties/68051f1bb6893852caa9a74a/messages/group?limit=20&before=68051f28b6893852caa9a758" \
+    -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  ```
+- **Example Response**:
+  ```json
+  {
+    "messages": [
+      {
+        "_id": "68051f28b6893852caa9a758",
+        "content": "Hello everyone in the party!",
+        "sender": {
+          "_id": "68051f15b6893852caa9a744",
+          "username": "testuser1",
+          "profilePhoto": "/default-profile.png"
+        },
+        "party": "68051f1bb6893852caa9a74a",
+        "isPrivate": false,
+        "createdAt": "2025-04-20T16:22:00.408Z",
+        "updatedAt": "2025-04-20T16:22:00.408Z",
+        "__v": 0
+      }
+    ],
+    "hasMore": false,
+    "total": 1
+  }
+  ```
+- **Error Responses**:
+  - `401`: Authentication required
+  - `403`: You are not a participant of this party
+  - `404`: Party not found
+  - `500`: Internal server error
+
+### Notes on Message Retrieval
+1. **Private Messages**:
+   - Only returns messages between you and the specified recipient
+   - Messages are ordered by creation time (newest first)
+   - Both sent and received messages are included
+   - Requires valid recipient ID
+
+2. **Group Messages**:
+   - Returns all public messages in the party
+   - Supports pagination with `limit` and `before` parameters
+   - Messages are ordered by creation time (newest first)
+   - Includes sender information for each message
+
+3. **Security**:
+   - Both endpoints require authentication
+   - Users must be party participants to access messages
+   - Private messages are only accessible to the involved users
+   - Group messages are accessible to all party participants 

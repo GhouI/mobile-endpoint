@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
     const { userId } = verifyToken(token);
     await connectToDatabase();
 
-    // Verify party exists and user is a participant
+    // Verify party exists
     const party = await Party.findById(id);
     if (!party) {
       return NextResponse.json(
@@ -36,7 +36,8 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    if (!party.participants.includes(userId)) {
+    // Only check participant status for group messages
+    if (!recipient && !party.participants.includes(userId)) {
       return NextResponse.json(
         { error: 'You are not a participant of this party' },
         { status: 403 }
@@ -104,7 +105,7 @@ export async function POST(request: NextRequest) {
 
     await connectToDatabase();
 
-    // Verify party exists and user is a participant
+    // Verify party exists
     const party = await Party.findById(id);
     if (!party) {
       return NextResponse.json(
@@ -113,9 +114,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!party.participants.includes(userId)) {
+    // Only check participant status for group messages
+    if (!recipientId && !party.participants.includes(userId)) {
       return NextResponse.json(
         { error: 'You are not a participant of this party' },
+        { status: 403 }
+      );
+    }
+
+    // For private messages to owner, verify recipient is the owner
+    if (recipientId && recipientId !== party.owner.toString()) {
+      return NextResponse.json(
+        { error: 'Private messages can only be sent to the party owner' },
         { status: 403 }
       );
     }

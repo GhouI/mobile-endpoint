@@ -96,3 +96,36 @@ export interface ConversationHistory {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface HolidayParty {
+  _id: string;
+  location: string;
+  description: string;
+  estimatedPrice: number;
+  maxParticipants: number;
+  currentParticipants: number;
+  owner: {
+    _id: string;
+    username: string;
+    profilePhoto: string;
+  };
+  participants: Array<{
+    _id: string;
+    username: string;
+    profilePhoto: string;
+  }>;
+  status: 'open' | 'full' | 'closed';
+  additionalFields?: {
+    duration?: string;
+    preferredLanguages?: string[];
+  };
+  isGlobal: boolean;
+  coordinates?: {
+    type: 'Point';
+    coordinates: [number, number];
+  } | null;
+  imageUrl?: string;
+  createdAt: string;
+  updatedAt: string;
+  __v: number;
+}
