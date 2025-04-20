@@ -312,6 +312,21 @@ This document outlines all available API endpoints in the application.
   ```
 
 ### Update Party
+- **Endpoint**: `PATCH /api/parties/{id}`
+- **Authentication**: Required (Party owner only)
+- **Description**: Update an existing party's details
+- **Request Body**: Only the following fields can be updated:
+  ```json
+  {
+    "location": "string",
+    "description": "string",
+    "estimatedPrice": "number",
+    "maxParticipants": "number",
+    "imageUrl": "string (optional)",
+    "additionalFields": "object (optional)",
+    "status": "string (open | full | closed)"
+  }
+  ```
 - **Example Request**:
   ```bash
   curl -X PATCH http://localhost:3000/api/parties/507f1f77bcf86cd799439012 \
@@ -319,6 +334,7 @@ This document outlines all available API endpoints in the application.
     -H "Content-Type: application/json" \
     -d '{
       "description": "Updated description: Looking for 3 travel buddies to explore Paris!",
+      "location": "Updated Location",
       "maxParticipants": 4,
       "estimatedPrice": 1800
     }'
@@ -328,14 +344,42 @@ This document outlines all available API endpoints in the application.
   {
     "message": "Party updated successfully",
     "party": {
-      "id": "507f1f77bcf86cd799439012",
+      "_id": "507f1f77bcf86cd799439012",
+      "location": "Updated Location",
       "description": "Updated description: Looking for 3 travel buddies to explore Paris!",
       "estimatedPrice": 1800,
       "maxParticipants": 4,
-      // ... other party fields
+      "currentParticipants": 1,
+      "coordinates": {
+        "type": "Point",
+        "coordinates": [2.3522, 48.8566]
+      },
+      "owner": {
+        "_id": "507f1f77bcf86cd799439011",
+        "username": "johndoe",
+        "profilePhoto": "/default-profile.png"
+      },
+      "participants": [
+        {
+          "_id": "507f1f77bcf86cd799439011",
+          "username": "johndoe",
+          "profilePhoto": "/default-profile.png"
+        }
+      ],
+      "status": "open",
+      "additionalFields": {},
+      "isGlobal": false,
+      "createdAt": "2024-03-20T12:00:00.000Z",
+      "updatedAt": "2024-03-20T12:00:00.000Z"
     }
   }
   ```
+- **Error Responses**:
+  - `400`: Invalid updates (attempting to update non-allowed fields)
+  - `401`: Authentication required
+  - `403`: Only the party owner can update the party
+  - `404`: Party not found
+  - `500`: Internal server error
 
 ### Delete Party
 - **Endpoint**: `DELETE /api/parties/{id}`
@@ -382,6 +426,107 @@ This document outlines all available API endpoints in the application.
     }
   }
   ```
+
+### Party Messages
+
+#### 1. Contact Party Owner
+- **Description**: Send and receive messages with the party owner
+- **Steps**:
+  1. First, get the party details to find the owner's ID:
+  ```bash
+  curl http://localhost:3000/api/parties/507f1f77bcf86cd799439012 \
+    -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  ```
+  2. Send a message to the owner:
+  ```bash
+  curl -X POST http://localhost:3000/api/parties/507f1f77bcf86cd799439012/messages \
+    -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
+    -H "Content-Type: application/json" \
+    -d '{
+      "content": "Hello, I would like to join your party!",
+      "recipientId": "507f1f77bcf86cd799439011"  # Owner's ID from party details
+    }'
+  ```
+  3. Get messages with the owner:
+  ```bash
+  curl "http://localhost:3000/api/parties/507f1f77bcf86cd799439012/messages?private=true&recipient=507f1f77bcf86cd799439011" \
+    -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  ```
+
+#### 2. General Party Messaging
+- **Description**: Send and receive messages with all party participants
+- **Send Message**:
+  ```bash
+  curl -X POST http://localhost:3000/api/parties/507f1f77bcf86cd799439012/messages \
+    -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
+    -H "Content-Type: application/json" \
+    -d '{
+      "content": "Hello everyone! Looking forward to the party!"
+    }'
+  ```
+- **Get All Party Messages**:
+  ```bash
+  curl "http://localhost:3000/api/parties/507f1f77bcf86cd799439012/messages" \
+    -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  ```
+
+#### Message Response Format
+- **Send Message Response**:
+  ```json
+  {
+    "status": "Message sent successfully",
+    "data": {
+      "_id": "507f1f77bcf86cd799439020",
+      "content": "Hello, I would like to join your party!",
+      "sender": {
+        "_id": "507f1f77bcf86cd799439013",
+        "username": "janesmith",
+        "profilePhoto": "/default-profile.png"
+      },
+      "party": "507f1f77bcf86cd799439012",
+      "recipient": {
+        "_id": "507f1f77bcf86cd799439011",
+        "username": "johndoe",
+        "profilePhoto": "/default-profile.png"
+      },
+      "isPrivate": true,
+      "createdAt": "2024-03-20T12:00:00.000Z",
+      "updatedAt": "2024-03-20T12:00:00.000Z"
+    }
+  }
+  ```
+- **Get Messages Response**:
+  ```json
+  {
+    "messages": [
+      {
+        "_id": "507f1f77bcf86cd799439020",
+        "content": "Hello, I would like to join your party!",
+        "sender": {
+          "_id": "507f1f77bcf86cd799439013",
+          "username": "janesmith",
+          "profilePhoto": "/default-profile.png"
+        },
+        "party": "507f1f77bcf86cd799439012",
+        "recipient": {
+          "_id": "507f1f77bcf86cd799439011",
+          "username": "johndoe",
+          "profilePhoto": "/default-profile.png"
+        },
+        "isPrivate": true,
+        "createdAt": "2024-03-20T12:00:00.000Z",
+        "updatedAt": "2024-03-20T12:00:00.000Z"
+      }
+    ]
+  }
+  ```
+
+#### Error Responses
+- `400`: Recipient is required for private messages
+- `401`: Authentication required
+- `403`: You are not a participant of this party
+- `404`: Party not found
+- `500`: Internal server error
 
 ### Leave Party
 - **Example Request**:
