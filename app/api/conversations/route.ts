@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
       isPrivate: true
     });
 
-    const populatedMessage = await created
+    const populatedMessage = await Message.findById(created._id)
       .populate('sender', 'username profilePhoto')
       .populate('recipient', 'username profilePhoto');
 
