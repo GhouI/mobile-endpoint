@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// Send a private message (DM) to another user
+// Send a private message (DM) to another user (no party context required)
 export async function POST(request: NextRequest) {
   try {
     const headersList = await headers();
@@ -59,33 +59,21 @@ export async function POST(request: NextRequest) {
     const { userId } = verifyToken(token);
     await connectToDatabase();
 
-    const { content, recipientId, partyId } = await request.json();
-    if (!content || !recipientId || !partyId) {
-      return NextResponse.json({ error: 'content, recipientId, and partyId are required' }, { status: 400 });
-    }
-
-    // Validate party exists and user is a participant or owner
-    const party = await Party.findById(partyId);
-    if (!party) {
-      return NextResponse.json({ error: 'Party not found' }, { status: 404 });
-    }
-    const isParticipant = party.participants.some((p: any) => p.toString() === userId) || party.owner.toString() === userId;
-    if (!isParticipant) {
-      return NextResponse.json({ error: 'You are not a participant of this party' }, { status: 403 });
+    const { content, recipientId } = await request.json();
+    if (!content || !recipientId) {
+      return NextResponse.json({ error: 'content and recipientId are required' }, { status: 400 });
     }
 
     const created = await Message.create({
       content,
       sender: userId,
       recipient: recipientId,
-      party: partyId,
       isPrivate: true
     });
 
     const populatedMessage = await created
       .populate('sender', 'username profilePhoto')
-      .populate('recipient', 'username profilePhoto')
-      .populate('party', 'description');
+      .populate('recipient', 'username profilePhoto');
 
     return NextResponse.json({ message: populatedMessage }, { status: 201 });
   } catch (error) {

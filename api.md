@@ -1089,12 +1089,11 @@ The JWT token is valid for 7 days from issuance.
 ### Send a Direct Message (DM)
 - **Endpoint**: `POST /api/conversations`
 - **Authentication**: Required
-- **Description**: Send a private message (DM) to another user in the context of a party.
+- **Description**: Send a private message (DM) to another user.
 - **Request Body**:
   ```json
   {
     "recipientId": "<recipientId>",
-    "partyId": "<partyId>",
     "content": "Your message here"
   }
   ```
@@ -1105,7 +1104,6 @@ The JWT token is valid for 7 days from issuance.
     -H "Content-Type: application/json" \
     -d '{
       "recipientId": "68051f15b6893852caa9a744",
-      "partyId": "68051f1bb6893852caa9a74a",
       "content": "Hey there!"
     }'
   ```
@@ -1117,7 +1115,6 @@ The JWT token is valid for 7 days from issuance.
       "content": "Hey there!",
       "sender": { ... },
       "recipient": { ... },
-      "party": { ... },
       "isPrivate": true,
       "createdAt": "2025-04-20T16:21:53.190Z",
       "updatedAt": "2025-04-20T16:21:53.190Z"
@@ -1125,8 +1122,6 @@ The JWT token is valid for 7 days from issuance.
   }
   ```
 - **Error Responses**:
-  - `400`: content, recipientId, and partyId are required
+  - `400`: content and recipientId are required
   - `401`: Authentication required
-  - `403`: You are not a participant of this party
-  - `404`: Party not found
   - `500`: Internal server error
