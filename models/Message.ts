@@ -27,7 +27,10 @@ const messageSchema = new mongoose.Schema<IMessage>(
     party: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Party',
-      required: true,
+      required: function(this: any) {
+        // Only require party for non-private (group/party) messages
+        return !this.isPrivate;
+      },
     },
     recipient: {
       type: mongoose.Schema.Types.ObjectId,
