@@ -1040,3 +1040,93 @@ The JWT token is valid for 7 days from issuance.
    - Users must be party participants to access messages
    - Private messages are only accessible to the involved users
    - Group messages are accessible to all party participants 
+
+## Direct Messages (DMs)
+
+### Get All Direct Messages (DMs)
+- **Endpoint**: `GET /api/conversations`
+- **Authentication**: Required
+- **Description**: Retrieve all private messages (DMs) sent to the authenticated user, grouped by sender.
+- **Example Request**:
+  ```bash
+  curl -X GET "https://mobile-endpoint.vercel.app/api/conversations" \
+    -H "Authorization: Bearer <JWT>"
+  ```
+- **Example Response**:
+  ```json
+  {
+    "conversations": [
+      {
+        "participant": {
+          "_id": "68051f15b6893852caa9a744",
+          "username": "testuser1",
+          "profilePhoto": "/default-profile.png"
+        },
+        "party": {
+          "_id": "68051f1bb6893852caa9a74a",
+          "description": "Join for an awesome gaming session!"
+        },
+        "messages": [
+          {
+            "_id": "68051f21b6893852caa9a750",
+            "content": "Hello!",
+            "sender": { ... },
+            "recipient": { ... },
+            "party": { ... },
+            "isPrivate": true,
+            "createdAt": "2025-04-20T16:21:53.190Z",
+            "updatedAt": "2025-04-20T16:21:53.190Z"
+          }
+        ]
+      }
+    ]
+  }
+  ```
+- **Error Responses**:
+  - `401`: Authentication required
+  - `500`: Internal server error
+
+### Send a Direct Message (DM)
+- **Endpoint**: `POST /api/conversations`
+- **Authentication**: Required
+- **Description**: Send a private message (DM) to another user in the context of a party.
+- **Request Body**:
+  ```json
+  {
+    "recipientId": "<recipientId>",
+    "partyId": "<partyId>",
+    "content": "Your message here"
+  }
+  ```
+- **Example Request**:
+  ```bash
+  curl -X POST "https://mobile-endpoint.vercel.app/api/conversations" \
+    -H "Authorization: Bearer <JWT>" \
+    -H "Content-Type: application/json" \
+    -d '{
+      "recipientId": "68051f15b6893852caa9a744",
+      "partyId": "68051f1bb6893852caa9a74a",
+      "content": "Hey there!"
+    }'
+  ```
+- **Example Response**:
+  ```json
+  {
+    "message": {
+      "_id": "68051f21b6893852caa9a750",
+      "content": "Hey there!",
+      "sender": { ... },
+      "recipient": { ... },
+      "party": { ... },
+      "isPrivate": true,
+      "createdAt": "2025-04-20T16:21:53.190Z",
+      "updatedAt": "2025-04-20T16:21:53.190Z"
+    }
+  }
+  ```
+- **Error Responses**:
+  - `400`: content, recipientId, and partyId are required
+  - `401`: Authentication required
+  - `403`: You are not a participant of this party
+  - `404`: Party not found
+  - `500`: Internal server error
