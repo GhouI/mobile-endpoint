@@ -19,22 +19,32 @@ export async function GET(request: NextRequest) {
     const { userId } = verifyToken(token);
     await connectToDatabase();
 
-    // Get all private messages where this user is the recipient
+    // Get all private messages where this user is either the sender or recipient
     const messages = await Message.find({
       isPrivate: true,
-      recipient: userId
+      $or: [
+        { recipient: userId },
+        { sender: userId }
+      ]
     })
       .populate('sender', 'username profilePhoto')
-      .populate('party', 'description')
+      .populate('recipient', 'username profilePhoto')
       .sort({ createdAt: -1 });
 
-    // Group by sender
+    // Group by conversation partner (either sender or recipient, depending on the message)
     const conversations = messages.reduce((acc: any, message: any) => {
-      const senderId = (message.sender as any)._id.toString();
-      if (!acc[senderId]) {
-        acc[senderId] = { participant: message.sender, party: message.party, messages: [] };
+      // Determine the conversation partner (the other person)
+      const isSender = message.sender._id.toString() === userId;
+      const partner = isSender ? message.recipient : message.sender;
+      const partnerId = partner._id.toString();
+
+      if (!acc[partnerId]) {
+        acc[partnerId] = {
+          participant: partner,
+          messages: []
+        };
       }
-      acc[senderId].messages.push(message);
+      acc[partnerId].messages.push(message);
       return acc;
     }, {});
 
