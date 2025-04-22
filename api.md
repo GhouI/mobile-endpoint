@@ -439,17 +439,18 @@ This document outlines all available API endpoints in the application.
   ```
   2. Send a message to the owner:
   ```bash
-  curl -X POST http://localhost:3000/api/parties/507f1f77bcf86cd799439012/messages \
+  curl -X POST http://localhost:3000/api/parties/messages \
     -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
     -H "Content-Type: application/json" \
     -d '{
+      "partyId": "507f1f77bcf86cd799439012",
       "content": "Hello, I would like to join your party!",
-      "recipientId": "507f1f77bcf86cd799439011"  # Owner's ID from party details
+      "userId": "507f1f77bcf86cd799439011"  # Owner's ID from party details
     }'
   ```
   3. Get messages with the owner:
   ```bash
-  curl "http://localhost:3000/api/parties/507f1f77bcf86cd799439012/messages?private=true&recipient=507f1f77bcf86cd799439011" \
+  curl "http://localhost:3000/api/parties/messages?private=true&recipient=507f1f77bcf86cd799439011" \
     -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
   ```
 
@@ -457,45 +458,24 @@ This document outlines all available API endpoints in the application.
 - **Description**: Send and receive messages with all party participants
 - **Send Message**:
   ```bash
-  curl -X POST http://localhost:3000/api/parties/507f1f77bcf86cd799439012/messages \
+  curl -X POST http://localhost:3000/api/parties/messages \
     -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
     -H "Content-Type: application/json" \
     -d '{
+      "partyId": "507f1f77bcf86cd799439012",
       "content": "Hello everyone! Looking forward to the party!"
     }'
   ```
 - **Get All Party Messages**:
   ```bash
-  curl "http://localhost:3000/api/parties/507f1f77bcf86cd799439012/messages" \
-    -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  curl -X GET "https://mobile-endpoint.vercel.app/api/parties/messages" \
+    -H "Authorization: Bearer <JWT>" \
+    -H "Content-Type: application/json" \
+    -d '{
+      "partyId": "68051f1bb6893852caa9a74a"
+    }'
   ```
-
-#### Message Response Format
-- **Send Message Response**:
-  ```json
-  {
-    "status": "Message sent successfully",
-    "data": {
-      "_id": "507f1f77bcf86cd799439020",
-      "content": "Hello, I would like to join your party!",
-      "sender": {
-        "_id": "507f1f77bcf86cd799439013",
-        "username": "janesmith",
-        "profilePhoto": "/default-profile.png"
-      },
-      "party": "507f1f77bcf86cd799439012",
-      "recipient": {
-        "_id": "507f1f77bcf86cd799439011",
-        "username": "johndoe",
-        "profilePhoto": "/default-profile.png"
-      },
-      "isPrivate": true,
-      "createdAt": "2024-03-20T12:00:00.000Z",
-      "updatedAt": "2024-03-20T12:00:00.000Z"
-    }
-  }
-  ```
-- **Get Messages Response**:
+- **Message Response Format**:
   ```json
   {
     "messages": [
@@ -840,32 +820,35 @@ The JWT token is valid for 7 days from issuance.
 ## Messaging
 
 ### Send Message
-- **Endpoint**: `POST /api/parties/{partyId}/messages`
+- **Endpoint**: `POST /api/parties/messages`
 - **Authentication**: Required
 - **Description**: Send a message to a party. Can be either private (to a specific user) or public (to all participants).
 - **Request Body**:
   ```json
   {
+    "partyId": "string (required)",
     "content": "string (required)",
-    "recipientId": "string (optional, for private messages)"
+    "userId": "string (required, for private messages)",
   }
   ```
 - **Example Requests**:
   ```bash
   # Send a private message
-  curl -X POST http://localhost:3000/api/parties/{partyId}/messages \
+  curl -X POST http://localhost:3000/api/parties/messages \
     -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
     -H "Content-Type: application/json" \
     -d '{
+      "partyId": "68051f1bb6893852caa9a74a",
       "content": "Hello party owner!",
-      "recipientId": "68051f15b6893852caa9a744"
+      "userId": "68051f15b6893852caa9a744"
     }'
 
   # Send a group message
-  curl -X POST http://localhost:3000/api/parties/{partyId}/messages \
+  curl -X POST http://localhost:3000/api/parties/messages \
     -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
     -H "Content-Type: application/json" \
     -d '{
+      "partyId": "68051f1bb6893852caa9a74a",
       "content": "Hello everyone in the party!"
     }'
   ```
@@ -876,16 +859,11 @@ The JWT token is valid for 7 days from issuance.
     "data": {
       "_id": "68051f28b6893852caa9a758",
       "content": "Hello everyone in the party!",
-      "sender": {
-        "_id": "68051f15b6893852caa9a744",
-        "username": "testuser1",
-        "profilePhoto": "/default-profile.png"
-      },
-      "party": "68051f1bb6893852caa9a74a",
+      "sender": { ... },
+      "party": { ... },
       "isPrivate": false,
       "createdAt": "2025-04-20T16:22:00.408Z",
-      "updatedAt": "2025-04-20T16:22:00.408Z",
-      "__v": 0
+      "updatedAt": "2025-04-20T16:22:00.408Z"
     }
   }
   ```
@@ -897,13 +875,23 @@ The JWT token is valid for 7 days from issuance.
   - `500`: Internal server error
 
 ### Get Party Messages
-- **Endpoint**: `GET /api/parties/{partyId}/messages`
+- **Endpoint**: `GET /api/parties/messages`
 - **Authentication**: Required
-- **Description**: Retrieve all public messages in a party. Private messages are not included in the response.
+- **Description**: Retrieve all messages in a party by providing the partyId in the request body.
+- **Request Body**:
+  ```json
+  {
+    "partyId": "string (required)"
+  }
+  ```
 - **Example Request**:
   ```bash
-  curl -X GET http://localhost:3000/api/parties/{partyId}/messages \
-    -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  curl -X GET "https://mobile-endpoint.vercel.app/api/parties/messages" \
+    -H "Authorization: Bearer <JWT>" \
+    -H "Content-Type: application/json" \
+    -d '{
+      "partyId": "68051f1bb6893852caa9a74a"
+    }'
   ```
 - **Example Response**:
   ```json
@@ -920,28 +908,29 @@ The JWT token is valid for 7 days from issuance.
         "party": "68051f1bb6893852caa9a74a",
         "isPrivate": false,
         "createdAt": "2025-04-20T16:22:00.408Z",
-        "updatedAt": "2025-04-20T16:22:00.408Z",
-        "__v": 0
+        "updatedAt": "2025-04-20T16:22:00.408Z"
       }
     ]
   }
   ```
-- **Error Responses**:
-  - `401`: Authentication required
-  - `403`: You are not a participant of this party
+- **Status Codes**:
+  - `200`: Success
+  - `400`: Bad request (missing or invalid partyId)
+  - `401`: Unauthorized
+  - `403`: Forbidden (not a party participant)
   - `404`: Party not found
   - `500`: Internal server error
 
 ### Get Private Messages
-- **Endpoint**: `GET /api/parties/{partyId}/messages/private`
+- **Endpoint**: `GET /api/parties/messages/private`
 - **Authentication**: Required
 - **Description**: Retrieve private messages between you and another party participant.
 - **Query Parameters**:
   - `recipientId`: ID of the user you want to see messages with (required)
 - **Example Request**:
   ```bash
-  curl -X GET "http://localhost:3000/api/parties/68051f1bb6893852caa9a74a/messages/private?recipientId=68051f15b6893852caa9a744" \
-    -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  curl -X GET "https://mobile-endpoint.vercel.app/api/parties/messages/private?recipientId=68051f15b6893852caa9a744" \
+    -H "Authorization: Bearer <JWT>"
   ```
 - **Example Response**:
   ```json
@@ -950,21 +939,11 @@ The JWT token is valid for 7 days from issuance.
       {
         "_id": "68051f21b6893852caa9a750",
         "content": "Hello party owner!",
-        "sender": {
-          "_id": "68051f15b6893852caa9a744",
-          "username": "testuser1",
-          "profilePhoto": "/default-profile.png"
-        },
-        "recipient": {
-          "_id": "68051f15b6893852caa9a744",
-          "username": "testuser1",
-          "profilePhoto": "/default-profile.png"
-        },
-        "party": "68051f1bb6893852caa9a74a",
+        "sender": { ... },
+        "recipient": { ... },
         "isPrivate": true,
         "createdAt": "2025-04-20T16:21:53.190Z",
-        "updatedAt": "2025-04-20T16:21:53.190Z",
-        "__v": 0
+        "updatedAt": "2025-04-20T16:21:53.190Z"
       }
     ]
   }
@@ -977,7 +956,7 @@ The JWT token is valid for 7 days from issuance.
   - `500`: Internal server error
 
 ### Get Group Messages
-- **Endpoint**: `GET /api/parties/{partyId}/messages/group`
+- **Endpoint**: `GET /api/parties/messages/group`
 - **Authentication**: Required
 - **Description**: Retrieve all public messages in a party's group chat.
 - **Query Parameters**:
@@ -986,12 +965,12 @@ The JWT token is valid for 7 days from issuance.
 - **Example Request**:
   ```bash
   # Get latest group messages
-  curl -X GET "http://localhost:3000/api/parties/68051f1bb6893852caa9a74a/messages/group" \
-    -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  curl -X GET "https://mobile-endpoint.vercel.app/api/parties/messages/group" \
+    -H "Authorization: Bearer <JWT>"
 
   # Get group messages with pagination
-  curl -X GET "http://localhost:3000/api/parties/68051f1bb6893852caa9a74a/messages/group?limit=20&before=68051f28b6893852caa9a758" \
-    -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  curl -X GET "https://mobile-endpoint.vercel.app/api/parties/messages/group?limit=20&before=68051f28b6893852caa9a758" \
+    -H "Authorization: Bearer <JWT>"
   ```
 - **Example Response**:
   ```json
@@ -1008,8 +987,7 @@ The JWT token is valid for 7 days from issuance.
         "party": "68051f1bb6893852caa9a74a",
         "isPrivate": false,
         "createdAt": "2025-04-20T16:22:00.408Z",
-        "updatedAt": "2025-04-20T16:22:00.408Z",
-        "__v": 0
+        "updatedAt": "2025-04-20T16:22:00.408Z"
       }
     ],
     "hasMore": false,
