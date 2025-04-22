@@ -1,12 +1,13 @@
-import { NextResponse, type NextRequest } from 'next/server';
+import { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import { Message } from '@/models/Message';
 import { Party } from '@/models/Party';
 import { verifyToken } from '@/lib/jwt';
 import { headers } from 'next/headers';
 
-// Send a message to a party
-export async function POST(request: NextRequest) {
+// Get messages for a party
+export async function GET(request: NextRequest) {
   try {
     const headersList = await headers();
     const authHeader = headersList.get('authorization');
@@ -20,18 +21,11 @@ export async function POST(request: NextRequest) {
     }
 
     const { userId } = verifyToken(token);
-    const { partyId, content, userId: recipientId } = await request.json();
+    const partyId = request.nextUrl.pathname.split('/').pop();
 
     if (!partyId) {
       return NextResponse.json(
         { error: 'Party ID is required' },
-        { status: 400 }
-      );
-    }
-
-    if (!content) {
-      return NextResponse.json(
-        { error: 'Message content is required' },
         { status: 400 }
       );
     }
@@ -55,25 +49,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create message
-    const message = await Message.create({
-      content,
-      sender: userId,
-      party: partyId,
-      recipient: recipientId || undefined,
-      isPrivate: !!recipientId,
-    });
-
-    const populatedMessage = await Message.findById(message._id)
+    // Get all messages for the party
+    const messages = await Message.find({ party: partyId })
       .populate('sender', 'username profilePhoto')
-      .populate('recipient', 'username profilePhoto');
+      .populate('recipient', 'username profilePhoto')
+      .sort({ createdAt: 1 });
 
-    return NextResponse.json({
-      status: 'Message sent successfully',
-      data: populatedMessage,
-    });
+    return NextResponse.json({ messages });
   } catch (error) {
-    console.error('Send message error:', error);
+    console.error('Get messages error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
