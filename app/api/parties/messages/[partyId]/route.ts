@@ -23,9 +23,9 @@ export async function GET(request: NextRequest) {
     const { userId } = verifyToken(token);
     const partyId = request.nextUrl.pathname.split('/').pop();
 
-    if (!partyId) {
+    if (!partyId || partyId === 'undefined') {
       return NextResponse.json(
-        { error: 'Party ID is required' },
+        { error: 'Invalid party ID' },
         { status: 400 }
       );
     }
